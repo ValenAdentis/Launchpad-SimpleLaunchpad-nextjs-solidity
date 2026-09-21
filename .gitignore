@@ -1,0 +1,15 @@
+/frontend/node_modules
+/frontend/.env*
+# vercel
+/frontend/.vercel
+
+# typescript
+/frontend/*.tsbuildinfo
+/frontend/next-env.d.ts
+
+/contracts/broadcast
+/contracts/cache
+/contracts/lib
+/contracts/out
+
+/frontend/.next
