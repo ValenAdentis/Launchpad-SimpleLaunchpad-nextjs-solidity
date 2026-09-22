@@ -30,6 +30,8 @@ contract Launchpad is Ownable, ReentrancyGuard {
         uint256 ethReserve;
         uint256 basePrice; // wei per whole token when no tokens are sold
         uint256 slope; // wei added to the price per whole token sold
+        uint256 buyTaxBps; // tax on buys, in basis points
+        uint256 sellTaxBps; // tax on sells, in basis points
         bool graduated; // true once the whole supply has been sold
     }
 
@@ -38,9 +40,6 @@ contract Launchpad is Ownable, ReentrancyGuard {
 
     /// @notice Flat ETH fee charged to create a launch.
     uint256 public creationFee;
-
-    /// @notice Trade fee in basis points, charged on buys and sells.
-    uint256 public tradeFeeBps;
 
     /// @notice Number of launches created so far. Launch ids start at 1.
     uint256 public launchCount;
@@ -65,26 +64,19 @@ contract Launchpad is Ownable, ReentrancyGuard {
         string symbol,
         uint256 totalSupply,
         uint256 basePrice,
-        uint256 slope
+        uint256 slope,
+        uint256 buyTaxBps,
+        uint256 sellTaxBps
     );
     event Bought(
-        uint256 indexed id,
-        address indexed buyer,
-        uint256 tokensOut,
-        uint256 ethSpent,
-        uint256 fee
+        uint256 indexed id, address indexed buyer, uint256 tokensOut, uint256 ethSpent, uint256 fee
     );
     event Sold(
-        uint256 indexed id,
-        address indexed seller,
-        uint256 tokensIn,
-        uint256 ethOut,
-        uint256 fee
+        uint256 indexed id, address indexed seller, uint256 tokensIn, uint256 ethOut, uint256 fee
     );
     event Graduated(uint256 indexed id, address indexed token);
     event CreatorFeesClaimed(address indexed creator, uint256 amount);
     event ProtocolFeesWithdrawn(address indexed recipient, uint256 amount);
-    event FeeUpdated(uint256 previous, uint256 current);
 
     error ZeroAddress();
     error InvalidParams();
@@ -96,14 +88,12 @@ contract Launchpad is Ownable, ReentrancyGuard {
     error NoFees();
     error TransferFailed();
 
-    constructor(address initialOwner, address feeRecipient_, uint256 creationFee_, uint256 tradeFeeBps_)
+    constructor(address initialOwner, address feeRecipient_, uint256 creationFee_)
         Ownable(initialOwner)
     {
         if (feeRecipient_ == address(0)) revert ZeroAddress();
-        if (tradeFeeBps_ > MAX_TRADE_FEE_BPS) revert FeeTooHigh();
         feeRecipient = feeRecipient_;
         creationFee = creationFee_;
-        tradeFeeBps = tradeFeeBps_;
     }
 
     // ---------------------------------------------------------------------
@@ -116,16 +106,23 @@ contract Launchpad is Ownable, ReentrancyGuard {
     /// @param totalSupply Total (fixed) supply, must be a whole number of tokens.
     /// @param basePrice Starting price in wei per whole token.
     /// @param slope Price increase in wei per whole token sold.
+    /// @param buyTaxBps Tax charged on buys, in basis points.
+    /// @param sellTaxBps Tax charged on sells, in basis points.
     function createLaunch(
         string calldata name,
         string calldata symbol,
         uint256 totalSupply,
         uint256 basePrice,
-        uint256 slope
+        uint256 slope,
+        uint256 buyTaxBps,
+        uint256 sellTaxBps
     ) external payable nonReentrant returns (address token, uint256 id) {
-        if (bytes(name).length == 0 || bytes(symbol).length == 0) revert InvalidParams();
+        if (bytes(name).length == 0 || bytes(symbol).length == 0) {
+            revert InvalidParams();
+        }
         if (totalSupply == 0 || totalSupply % WAD != 0) revert InvalidParams();
         if (basePrice == 0 || slope == 0) revert InvalidParams();
+        if (buyTaxBps > MAX_TRADE_FEE_BPS || sellTaxBps > MAX_TRADE_FEE_BPS) revert FeeTooHigh();
         if (msg.value != creationFee) revert InsufficientValue();
 
         LaunchToken created = new LaunchToken(name, symbol, totalSupply, msg.sender);
@@ -140,6 +137,8 @@ contract Launchpad is Ownable, ReentrancyGuard {
             ethReserve: 0,
             basePrice: basePrice,
             slope: slope,
+            buyTaxBps: buyTaxBps,
+            sellTaxBps: sellTaxBps,
             graduated: false
         });
         tokenToId[token] = id;
@@ -148,7 +147,18 @@ contract Launchpad is Ownable, ReentrancyGuard {
             protocolFees += msg.value;
         }
 
-        emit Launched(id, token, msg.sender, name, symbol, totalSupply, basePrice, slope);
+        emit Launched(
+            id,
+            token,
+            msg.sender,
+            name,
+            symbol,
+            totalSupply,
+            basePrice,
+            slope,
+            buyTaxBps,
+            sellTaxBps
+        );
     }
 
     // ---------------------------------------------------------------------
@@ -166,7 +176,7 @@ contract Launchpad is Ownable, ReentrancyGuard {
 
         uint256 remaining = l.totalSupply - l.tokensSold;
 
-        uint256 fee = (msg.value * tradeFeeBps) / BPS_DENOMINATOR;
+        uint256 fee = (msg.value * l.buyTaxBps) / BPS_DENOMINATOR;
         uint256 curveEth = msg.value - fee;
         uint256 tokensOut = _tokensForEth(l.tokensSold, curveEth, l.basePrice, l.slope);
 
@@ -176,7 +186,7 @@ contract Launchpad is Ownable, ReentrancyGuard {
         if (tokensOut > remaining) {
             tokensOut = remaining;
             spend = _costToBuy(l.tokensSold, tokensOut, l.basePrice, l.slope);
-            fee = (spend * tradeFeeBps) / BPS_DENOMINATOR;
+            fee = (spend * l.buyTaxBps) / BPS_DENOMINATOR;
             refund = msg.value - spend - fee;
         } else {
             spend = curveEth;
@@ -217,7 +227,7 @@ contract Launchpad is Ownable, ReentrancyGuard {
         if (gross > l.ethReserve) {
             gross = l.ethReserve;
         }
-        uint256 fee = (gross * tradeFeeBps) / BPS_DENOMINATOR;
+        uint256 fee = (gross * l.sellTaxBps) / BPS_DENOMINATOR;
         uint256 payout = gross - fee;
 
         l.tokensSold -= amount;
@@ -246,14 +256,14 @@ contract Launchpad is Ownable, ReentrancyGuard {
         if (l.token == address(0)) revert LaunchNotFound();
 
         uint256 remaining = l.totalSupply - l.tokensSold;
-        fee = (ethIn * tradeFeeBps) / BPS_DENOMINATOR;
+        fee = (ethIn * l.buyTaxBps) / BPS_DENOMINATOR;
         uint256 curveEth = ethIn - fee;
 
         tokensOut = _tokensForEth(l.tokensSold, curveEth, l.basePrice, l.slope);
         if (tokensOut > remaining) {
             tokensOut = remaining;
             spend = _costToBuy(l.tokensSold, tokensOut, l.basePrice, l.slope);
-            fee = (spend * tradeFeeBps) / BPS_DENOMINATOR;
+            fee = (spend * l.buyTaxBps) / BPS_DENOMINATOR;
         } else {
             spend = curveEth;
         }
@@ -273,7 +283,7 @@ contract Launchpad is Ownable, ReentrancyGuard {
         if (gross > l.ethReserve) {
             gross = l.ethReserve;
         }
-        fee = (gross * tradeFeeBps) / BPS_DENOMINATOR;
+        fee = (gross * l.sellTaxBps) / BPS_DENOMINATOR;
         ethOut = gross - fee;
     }
 
@@ -347,13 +357,6 @@ contract Launchpad is Ownable, ReentrancyGuard {
         creationFee = newFee;
     }
 
-    function setTradeFeeBps(uint256 newFeeBps) external onlyOwner {
-        if (newFeeBps > MAX_TRADE_FEE_BPS) revert FeeTooHigh();
-        uint256 previous = tradeFeeBps;
-        tradeFeeBps = newFeeBps;
-        emit FeeUpdated(previous, newFeeBps);
-    }
-
     /// @notice Transfer ownership of the launchpad.
     function transferOwnership(address newOwner) public override onlyOwner {
         if (newOwner == address(0)) revert ZeroAddress();
@@ -366,24 +369,22 @@ contract Launchpad is Ownable, ReentrancyGuard {
 
     /// @dev Integral of the linear curve between `sold` and `sold + amount`, in wei.
     ///      cost = basePrice*d/WAD + slope*(2*sold*d + d^2) / (2*WAD^2)
-    function _costToBuy(
-        uint256 sold,
-        uint256 amount,
-        uint256 basePrice,
-        uint256 slope
-    ) internal pure returns (uint256) {
+    function _costToBuy(uint256 sold, uint256 amount, uint256 basePrice, uint256 slope)
+        internal
+        pure
+        returns (uint256)
+    {
         uint256 linear = (basePrice * amount) / WAD;
         uint256 quadratic = (slope * (2 * sold * amount + amount * amount)) / (2 * WAD * WAD);
         return linear + quadratic;
     }
 
     /// @dev Integral of the linear curve between `sold - amount` and `sold`, in wei.
-    function _proceedsForSell(
-        uint256 sold,
-        uint256 amount,
-        uint256 basePrice,
-        uint256 slope
-    ) internal pure returns (uint256) {
+    function _proceedsForSell(uint256 sold, uint256 amount, uint256 basePrice, uint256 slope)
+        internal
+        pure
+        returns (uint256)
+    {
         uint256 linear = (basePrice * amount) / WAD;
         uint256 quadratic = (slope * (2 * sold * amount - amount * amount)) / (2 * WAD * WAD);
         return linear + quadratic;
@@ -391,12 +392,11 @@ contract Launchpad is Ownable, ReentrancyGuard {
 
     /// @dev Inverse of {_costToBuy}: tokens received for `ethIn`.
     ///      Solves slope*d^2 + (2*WAD*basePrice + 2*sold*slope)*d - 2*WAD^2*ethIn = 0.
-    function _tokensForEth(
-        uint256 sold,
-        uint256 ethIn,
-        uint256 basePrice,
-        uint256 slope
-    ) internal pure returns (uint256) {
+    function _tokensForEth(uint256 sold, uint256 ethIn, uint256 basePrice, uint256 slope)
+        internal
+        pure
+        returns (uint256)
+    {
         uint256 b = 2 * WAD * basePrice + 2 * sold * slope;
         uint256 discriminant = b * b + 8 * slope * WAD * WAD * ethIn;
         uint256 root = _sqrt(discriminant);

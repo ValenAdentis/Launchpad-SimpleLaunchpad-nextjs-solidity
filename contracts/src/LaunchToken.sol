@@ -21,12 +21,9 @@ contract LaunchToken is ERC20 {
         _;
     }
 
-    constructor(
-        string memory name_,
-        string memory symbol_,
-        uint256 totalSupply_,
-        address creator_
-    ) ERC20(name_, symbol_) {
+    constructor(string memory name_, string memory symbol_, uint256 totalSupply_, address creator_)
+        ERC20(name_, symbol_)
+    {
         if (creator_ == address(0)) revert ZeroAddress();
         launchpad = msg.sender;
         creator = creator_;

@@ -11,6 +11,7 @@ import {
 import {
   LAUNCHPAD_ADDRESS,
   currentPrice,
+  formatBps,
   formatEth,
   formatTokenAmount,
   launchTokenAbi,
@@ -176,6 +177,8 @@ export function LaunchView({ launch }: { launch: Launch }) {
             <Info label="Creator" value={launch.creator} mono />
             <Info label="Base price" value={`${formatEth(launch.basePrice)} ETH`} />
             <Info label="Slope" value={`${formatEth(launch.slope, 10)} ETH / token`} />
+            <Info label="Buy tax" value={formatBps(launch.buyTaxBps)} />
+            <Info label="Sell tax" value={formatBps(launch.sellTaxBps)} />
           </div>
         </div>
 

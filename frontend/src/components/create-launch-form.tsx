@@ -22,6 +22,8 @@ const DEFAULTS = {
   supply: "1000000",
   basePrice: "0.000001",
   slope: "0.00000001",
+  buyTax: "1",
+  sellTax: "1",
 };
 
 function hashHue(...parts: string[]): number {
@@ -29,6 +31,16 @@ function hashHue(...parts: string[]): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return h % 360;
+}
+
+const MAX_TAX_PERCENT = 10;
+
+/** Parse a percentage string ("1", "1.5") into basis points (100, 150). */
+function percentToBps(value: string): number | null {
+  const n = Number(value.trim());
+  if (!Number.isFinite(n)) return null;
+  if (n < 0 || n > MAX_TAX_PERCENT) return null;
+  return Math.round(n * 100);
 }
 
 const MAX_IMAGE_BYTES = 2_000_000;
@@ -70,6 +82,8 @@ export function CreateLaunchForm() {
   const [supply, setSupply] = useState(DEFAULTS.supply);
   const [basePrice, setBasePrice] = useState(DEFAULTS.basePrice);
   const [slope, setSlope] = useState(DEFAULTS.slope);
+  const [buyTax, setBuyTax] = useState(DEFAULTS.buyTax);
+  const [sellTax, setSellTax] = useState(DEFAULTS.sellTax);
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -125,10 +139,17 @@ export function CreateLaunchForm() {
         return null;
       }
     })();
-    return { totalSupply, bp, sl };
-  }, [supply, basePrice, slope]);
+    const buyBps = percentToBps(buyTax);
+    const sellBps = percentToBps(sellTax);
+    return { totalSupply, bp, sl, buyBps, sellBps };
+  }, [supply, basePrice, slope, buyTax, sellTax]);
 
-  const valid = parsed.totalSupply != null && parsed.bp != null && parsed.sl != null;
+  const valid =
+    parsed.totalSupply != null &&
+    parsed.bp != null &&
+    parsed.sl != null &&
+    parsed.buyBps != null &&
+    parsed.sellBps != null;
 
   function onImageFile(file: File | undefined) {
     if (!file) return;
@@ -160,16 +181,21 @@ export function CreateLaunchForm() {
       const totalSupply = parseEther(supply.trim());
       const bp = parseEther(basePrice.trim());
       const sl = parseEther(slope.trim());
+      const buyBps = percentToBps(buyTax);
+      const sellBps = percentToBps(sellTax);
       if (totalSupply <= 0n || totalSupply % 10n ** 18n !== 0n) {
         throw new Error("Supply must be a whole number of tokens");
       }
       if (bp <= 0n || sl <= 0n) throw new Error("Price and slope must be greater than zero");
+      if (buyBps == null || sellBps == null) {
+        throw new Error(`Buy and sell tax must be between 0% and ${MAX_TAX_PERCENT}%`);
+      }
 
       writeContract({
         address: LAUNCHPAD_ADDRESS,
         abi: launchpadAbi,
         functionName: "createLaunch",
-        args: [name.trim(), symbol.trim().toUpperCase(), totalSupply, bp, sl],
+        args: [name.trim(), symbol.trim().toUpperCase(), totalSupply, bp, sl, BigInt(buyBps), BigInt(sellBps)],
         value: creationFee ?? 0n,
       });
     } catch (err) {
@@ -293,6 +319,34 @@ export function CreateLaunchForm() {
           </div>
         </div>
 
+        <div className="mb-6">
+          <p className="mb-3 text-sm font-bold tracking-widest text-sage/50">TRADE TAX</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Buy tax (%)">
+              <input
+                value={buyTax}
+                onChange={(e) => setBuyTax(e.target.value)}
+                inputMode="decimal"
+                placeholder="1"
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Sell tax (%)">
+              <input
+                value={sellTax}
+                onChange={(e) => setSellTax(e.target.value)}
+                inputMode="decimal"
+                placeholder="1"
+                className={inputClass}
+              />
+            </Field>
+          </div>
+          <p className="mt-2 text-xs text-sage/50">
+            Tax is charged on every buy and sell and split 50/50 between the token creator and
+            the protocol. Max {MAX_TAX_PERCENT}% each.
+          </p>
+        </div>
+
         <div className="mb-5 flex items-center justify-between rounded-xl bg-black/25 px-4 py-3 text-base">
           <span className="text-sage/60">Creation fee</span>
           <span className="font-mono font-semibold text-white">
@@ -361,6 +415,18 @@ export function CreateLaunchForm() {
 
           <div className="relative mt-6 grid grid-cols-2 gap-2">
             <div className="rounded-xl bg-black/25 px-3 py-3">
+              <p className="text-xs text-sage/50">Buy tax</p>
+              <p className="mt-0.5 font-mono text-base text-white">
+                {parsed.buyBps != null ? `${parsed.buyBps / 100}%` : "—"}
+              </p>
+            </div>
+            <div className="rounded-xl bg-black/25 px-3 py-3">
+              <p className="text-xs text-sage/50">Sell tax</p>
+              <p className="mt-0.5 font-mono text-base text-white">
+                {parsed.sellBps != null ? `${parsed.sellBps / 100}%` : "—"}
+              </p>
+            </div>
+            <div className="rounded-xl bg-black/25 px-3 py-3">
               <p className="text-xs text-sage/50">Base price</p>
               <p className="mt-0.5 truncate font-mono text-base text-white">
                 {formatEth(parsed.bp ?? 0n, 8)} ETH
@@ -406,7 +472,7 @@ export function CreateLaunchForm() {
                 token is instantly tradable on the curve.
               </>
             ) : (
-              "Enter a valid supply, base price and slope to preview your curve."
+              "Enter a valid supply, base price, slope and taxes to preview your curve."
             )}
           </div>
         </div>

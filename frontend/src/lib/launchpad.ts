@@ -2,7 +2,7 @@ import { formatEther, formatUnits } from "viem";
 
 /** Address of the deployed Launchpad on Base Sepolia. Override via NEXT_PUBLIC_LAUNCHPAD_ADDRESS. */
 export const LAUNCHPAD_ADDRESS = (process.env.NEXT_PUBLIC_LAUNCHPAD_ADDRESS ??
-  "0x88b4420CCd4b4a09413D56B83b6bBffD04C7Bd5c") as `0x${string}`;
+  "0x17818f88a3B3064A2448Ad54cb2d1cfC5C3b59A2") as `0x${string}`;
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
@@ -15,13 +15,6 @@ export const launchpadAbi = [
   {
     type: "function",
     name: "creationFee",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    type: "function",
-    name: "tradeFeeBps",
     stateMutability: "view",
     inputs: [],
     outputs: [{ name: "", type: "uint256" }],
@@ -67,6 +60,8 @@ export const launchpadAbi = [
       { name: "ethReserve", type: "uint256" },
       { name: "basePrice", type: "uint256" },
       { name: "slope", type: "uint256" },
+      { name: "buyTaxBps", type: "uint256" },
+      { name: "sellTaxBps", type: "uint256" },
       { name: "graduated", type: "bool" },
     ],
   },
@@ -87,6 +82,8 @@ export const launchpadAbi = [
           { name: "ethReserve", type: "uint256" },
           { name: "basePrice", type: "uint256" },
           { name: "slope", type: "uint256" },
+          { name: "buyTaxBps", type: "uint256" },
+          { name: "sellTaxBps", type: "uint256" },
           { name: "graduated", type: "bool" },
         ],
       },
@@ -136,6 +133,8 @@ export const launchpadAbi = [
       { name: "totalSupply", type: "uint256" },
       { name: "basePrice", type: "uint256" },
       { name: "slope", type: "uint256" },
+      { name: "buyTaxBps", type: "uint256" },
+      { name: "sellTaxBps", type: "uint256" },
     ],
     outputs: [
       { name: "token", type: "address" },
@@ -185,6 +184,8 @@ export const launchpadAbi = [
       { name: "totalSupply", type: "uint256", indexed: false },
       { name: "basePrice", type: "uint256", indexed: false },
       { name: "slope", type: "uint256", indexed: false },
+      { name: "buyTaxBps", type: "uint256", indexed: false },
+      { name: "sellTaxBps", type: "uint256", indexed: false },
     ],
   },
   {
@@ -278,6 +279,8 @@ export type Launch = {
   ethReserve: bigint;
   basePrice: bigint;
   slope: bigint;
+  buyTaxBps: bigint;
+  sellTaxBps: bigint;
   graduated: boolean;
 };
 
@@ -294,11 +297,24 @@ export function toLaunch(
     bigint,
     bigint,
     bigint,
+    bigint,
+    bigint,
     boolean,
   ],
 ): Launch {
-  const [token, creator, totalSupply, tokensSold, ethReserve, basePrice, slope, graduated] = raw;
-  return { id, token, creator, totalSupply, tokensSold, ethReserve, basePrice, slope, graduated };
+  const [
+    token,
+    creator,
+    totalSupply,
+    tokensSold,
+    ethReserve,
+    basePrice,
+    slope,
+    buyTaxBps,
+    sellTaxBps,
+    graduated,
+  ] = raw;
+  return { id, token, creator, totalSupply, tokensSold, ethReserve, basePrice, slope, buyTaxBps, sellTaxBps, graduated };
 }
 
 /** Build a Launch from an item of `getAllLaunches()` (1-based ids). */
@@ -324,6 +340,12 @@ export function currentPrice(l: Launch): bigint {
 export function formatEth(value: bigint, maxFractionDigits = 5): string {
   const n = Number(formatEther(value));
   return n.toLocaleString(undefined, { maximumFractionDigits: maxFractionDigits });
+}
+
+/** Format basis points as a percentage, e.g. 100 bps -> "1%". */
+export function formatBps(bps: bigint | number): string {
+  const n = Number(bps) / 100;
+  return `${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
 }
 
 export function formatTokenAmount(value: bigint, maxFractionDigits = 2): string {

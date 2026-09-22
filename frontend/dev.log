@@ -20,3 +20,4 @@ See more: https://nextjs.org/docs/app/guides/local-development
  GET / 200 in 122ms (next.js: 21ms, application-code: 100ms)
  HEAD / 200 in 1939ms (next.js: 84ms, application-code: 1855ms)
 [browser] Lit is in dev mode. Not recommended for production! See https://lit.dev/msg/dev-mode for more information.
+  Reload env: .env.local
