@@ -9,6 +9,7 @@
 
 /contracts/broadcast
 /contracts/cache
+/contracts/contracts.env
 /contracts/lib
 /contracts/out
 
