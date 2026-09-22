@@ -3,7 +3,7 @@ import { http } from "wagmi";
 import { base, baseSepolia, localhost } from "wagmi/chains";
 
 const projectId =
-  process.env.NEXT_PUBLIC_WC_PROJECT_ID || "00000000000000000000000000000000";
+  process.env.NEXT_PUBLIC_WC_PROJECT_ID || "d9115b853df7f12ed6be8ef82665329a";
 
 export const wagmiConfig = getDefaultConfig({
   appName: "LaunchPad Simple",

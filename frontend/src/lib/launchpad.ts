@@ -1,8 +1,8 @@
 import { formatEther, formatUnits } from "viem";
 
-/** Address of the deployed Launchpad. Set via NEXT_PUBLIC_LAUNCHPAD_ADDRESS. */
+/** Address of the deployed Launchpad on Base Sepolia. Override via NEXT_PUBLIC_LAUNCHPAD_ADDRESS. */
 export const LAUNCHPAD_ADDRESS = (process.env.NEXT_PUBLIC_LAUNCHPAD_ADDRESS ??
-  "") as `0x${string}`;
+  "0x88b4420CCd4b4a09413D56B83b6bBffD04C7Bd5c") as `0x${string}`;
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
