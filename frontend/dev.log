@@ -1,0 +1,14 @@
+
+> frontend@0.1.0 dev
+> next dev --hostname 0.0.0.0
+
+▲ Next.js 16.3.5 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://0.0.0.0:3000
+- Environments: .env.local
+✓ Ready in 3.8s
+✓ Running next.config.ts took 43ms
+⚠ Slow filesystem detected. The benchmark took 210ms. If \\?\D:\Task\LaunchPad Simple\frontend\.next\dev is a network drive, consider moving it to a local folder.
+See more: https://nextjs.org/docs/app/guides/local-development
+
+○ Compiling / ...
