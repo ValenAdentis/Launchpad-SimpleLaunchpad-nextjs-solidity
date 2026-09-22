@@ -12,3 +12,8 @@
 See more: https://nextjs.org/docs/app/guides/local-development
 
 ○ Compiling / ...
+(node:6540) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✓ Finished filesystem cache database compaction in 15.3s
+ GET / 200 in 3.5s (next.js: 2.7s, application-code: 798ms)
+ GET / 200 in 43ms (next.js: 8ms, application-code: 35ms)
